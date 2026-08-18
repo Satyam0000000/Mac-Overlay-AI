@@ -1,0 +1,13 @@
+{
+  "name": "private-overlay-safe",
+  "version": "1.0.0",
+  "description": "A small macOS Electron overlay with private local API-key storage.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "electron": "^37.0.0",
+    "openai": "^5.0.0"
+  }
+}

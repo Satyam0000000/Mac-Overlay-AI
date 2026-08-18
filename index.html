@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Private Overlay</title>
+<style>
+    /* Force absolute transparency for the window viewport and body */
+    html, body, main {
+      background: transparent !important;
+      background-color: transparent !important;
+    }
+    
+    body { 
+      margin: 0; 
+      color: #000; 
+      font: 14px -apple-system, BlinkMacSystemFont, sans-serif; 
+    }
+    
+    #app { 
+      height: 100vh; 
+      display: flex; 
+      flex-direction: column; 
+      overflow: hidden; 
+      border: none !important; 
+      outline: none !important;
+      border-radius: 16px; 
+      box-shadow: none !important; 
+      background: transparent !important; 
+    }
+
+    /* Removed all dark background and borders from containers */
+    header, #chat, .composer, #settings {
+      background: transparent !important;
+      border: none !important;
+      outline: none !important;
+    }
+
+    /* Fully transparent message bubbles with black text for visibility */
+    .message { 
+      max-width:88%; 
+      padding:10px 12px; 
+      white-space:pre-wrap; 
+      line-height:1.4; 
+      border-radius:12px; 
+      background: transparent !important; 
+      backdrop-filter: none; 
+      border: none !important; 
+      outline: none !important;
+      box-shadow: none !important;
+      color: #000; 
+    } 
+    .user { 
+      align-self:flex-end; 
+      background: transparent !important; 
+      backdrop-filter: none; 
+      border: none !important; 
+      outline: none !important;
+      box-shadow: none !important;
+      color: #000; 
+    }
+    
+    header { -webkit-app-region: drag !important; padding: 13px 16px; display:flex; justify-content:space-between; color:#000; font-size:12px; }
+    header button { -webkit-app-region: no-drag !important; }
+    button, input, textarea { font: inherit; } 
+    
+    /* Translucent glass buttons with no black borders and black readable text */
+    button { 
+      border: none !important; 
+      outline: none !important;
+      border-radius:9px; 
+      background: transparent !important; 
+      backdrop-filter: none; 
+      color: #000; 
+      padding:9px 12px; 
+      cursor:pointer; 
+    } 
+    button.secondary { background: transparent !important; color: #000; border: none !important; }
+    button:focus, input:focus, textarea:focus { outline: none !important; border: none !important; box-shadow: none !important; }
+    
+    #chat { padding: 14px; flex: 1; overflow-y: auto; display:flex; flex-direction:column; gap:10px; } 
+    .composer { padding:12px; display:grid; gap:8px; border: none !important; } 
+    
+    /* Translucent text input and textarea fields with no black borders and black text */
+    textarea, input { 
+      width:100%; 
+      background: transparent !important; 
+      backdrop-filter: none; 
+      border: none !important; 
+      outline: none !important;
+      border-radius:9px; 
+      color: #000; 
+      padding:10px; 
+    } 
+    textarea { resize:none; height:66px; }
+    
+    #chat, .composer, textarea, input { -webkit-app-region: no-drag !important; pointer-events: auto !important; }
+    .actions { display:flex; gap:8px; align-items:center; } 
+    #imageName { color: #000; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; } 
+    #settings { padding:16px; display:none; gap:12px; flex:1; flex-direction:column; overflow:auto; background: rgba(240, 240, 245, 0.75); backdrop-filter: blur(16px); } 
+    #settings.open { display:flex; } 
+    #app.settings-open #chat, #app.settings-open .composer { display:none; } 
+    .hint { color: #000; font-size:12px; line-height:1.4; } 
+    .hidden { display:none; }
+    
+    input, textarea {
+      -webkit-user-select: text !important;
+      user-select: text !important;
+      cursor: text !important;
+    }
+  </style>
+</head>
+<body>
+  <main id="app">
+    <header><span>PRIVATE OVERLAY</span><button id="settingsButton" class="secondary">Settings</button></header>
+    <section id="chat" aria-live="polite"></section>
+    <section class="composer">
+      <input type="text" id="message" placeholder="Ask anything... (Enter to send)" autofocus />
+      <div class="actions"><input id="image" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" /><button id="imageButton" class="secondary">Image</button><span id="imageName">No image</span><button id="send">Send</button></div>
+    </section>
+    <section id="settings"><strong>OpenAI API key</strong><input id="apiKey" type="password" autocomplete="off" placeholder="sk-…" /><button id="saveKey">Save securely</button><span id="status" class="hint"></span><p class="hint">Stored locally using macOS Keychain encryption. This overlay is not designed to hide from capture or screen-sharing software.</p></section>
+  </main>
+  <script src="renderer.js"></script>
+</body>
+</html>
