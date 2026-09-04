@@ -3,13 +3,75 @@ const message = document.querySelector('#message');
 const imageInput = document.querySelector('#image');
 const imageName = document.querySelector('#imageName');
 const settings = document.querySelector('#settings');
+const modelSelect = document.querySelector('#modelSelect');
+const themeToggle = document.querySelector('#themeToggle');
+const imagePreviewContainer = document.querySelector('#imagePreviewContainer');
 const history = [];
-let selectedImage = null;
+let selectedImages = [];
+let isWhiteText = false;
+const captureButton = document.querySelector('#captureButton');
 
+function updateImagePreviews() {
+  imagePreviewContainer.innerHTML = '';
+  if (selectedImages.length === 0) {
+    imagePreviewContainer.style.display = 'none';
+    imageName.textContent = 'No image';
+    imageName.style.color = '#9da3b4';
+    return;
+  }
+  imagePreviewContainer.style.display = 'flex';
+  imageName.textContent = `${selectedImages.length} attached`;
+  imageName.style.color = '#9da3b4';
+  selectedImages.forEach((imgUrl, index) => {
+    const thumbWrapper = document.createElement('div');
+    thumbWrapper.className = 'thumb-wrapper';
+    const img = document.createElement('img');
+    img.src = imgUrl;
+    img.className = 'thumb-preview';
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'thumb-delete-btn';
+    deleteBtn.textContent = '✕';
+    deleteBtn.onclick = () => {
+      selectedImages.splice(index, 1);
+      updateImagePreviews();
+    };
+    thumbWrapper.appendChild(img);
+    thumbWrapper.appendChild(deleteBtn);
+    imagePreviewContainer.appendChild(thumbWrapper);
+  });
+}
+
+if (captureButton) {
+  captureButton.addEventListener('click', async () => {
+    const idleLabel = '📸 Snap';
+    try {
+      captureButton.disabled = true;
+      captureButton.textContent = 'Capturing…';
+      const dataUrl = await window.overlay.captureScreen();
+      if (!dataUrl) throw new Error('No image was returned from screen capture.');
+      selectedImages.push(dataUrl);
+      updateImagePreviews();
+    } catch (error) {
+      imageName.textContent = error.message || 'Unable to capture the screen.';
+    } finally {
+      captureButton.disabled = false;
+      captureButton.textContent = idleLabel;
+    }
+  });
+}
+
+themeToggle.addEventListener('click', () => {
+  isWhiteText = !isWhiteText;
+  document.body.style.color = isWhiteText ? '#ffffff' : '#000000';
+  document.querySelectorAll('header, button, input, textarea, select, .message, #imageName, .hint').forEach(el => {
+    el.style.color = isWhiteText ? '#ffffff' : '#000000';
+  });
+});
 function addMessage(role, text) {
   const node = document.createElement('div');
   node.className = `message ${role}`;
   node.textContent = text;
+  node.style.color = isWhiteText ? '#ffffff' : '#000000';
   chat.append(node);
   chat.scrollTop = chat.scrollHeight;
 }
@@ -22,14 +84,15 @@ async function fileToDataUrl(file) {
 
 async function send() {
   const text = message.value.trim();
-  if (!text && !selectedImage) return;
+  if (!text && selectedImages.length === 0) return;
 
   const sendButton = document.querySelector('#send');
   message.disabled = true;
   sendButton.disabled = true;
   sendButton.textContent = "Sending...";
 
-  addMessage('user', text || '[Image attached]');
+  const attachLabel = selectedImages.length > 0 ? `[${selectedImages.length} image(s) attached]` : '';
+  addMessage('user', text ? `${text} ${attachLabel}` : attachLabel);
 
   // Create loading indicator for the AI
   const loadingDiv = document.createElement('div');
@@ -40,19 +103,19 @@ async function send() {
   chat.scrollTop = chat.scrollHeight;
 
   try {
-    const reply = await window.overlay.sendChat({ text, imageDataUrl: selectedImage, history });
+    const model = modelSelect.value;
+    const reply = await window.overlay.sendChat({ text, images: selectedImages, history, model });
     
     const activeLoading = document.getElementById('current-loading-indicator');
     if (activeLoading) activeLoading.remove();
 
-    history.push({ role: 'user', text: text || 'Please analyze the attached image.' }, { role: 'assistant', text: reply });
+    history.push({ role: 'user', text: text || 'Please analyze the attached images.' }, { role: 'assistant', text: reply });
     addMessage('assistant', reply);
     
     message.value = ''; 
-    selectedImage = null; 
+    selectedImages = []; 
+    updateImagePreviews();
     imageInput.value = ''; 
-    imageName.textContent = 'No image';
-    imageName.style.color = "#9da3b4";
   } catch (error) {
     const activeLoading = document.getElementById('current-loading-indicator');
     if (activeLoading) activeLoading.remove();
@@ -69,7 +132,20 @@ async function send() {
 document.querySelector('#send').addEventListener('click', send);
 message.addEventListener('keydown', (event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send(); } });
 document.querySelector('#imageButton').addEventListener('click', () => imageInput.click());
-imageInput.addEventListener('change', async () => { try { selectedImage = await fileToDataUrl(imageInput.files[0]); imageName.textContent = imageInput.files[0]?.name || 'No image'; imageName.style.color = "#9da3b4"; } catch (error) { imageName.textContent = error.message; } });
+imageInput.addEventListener('change', async () => {
+  try {
+    const file = imageInput.files[0];
+    if (file) {
+      const url = await fileToDataUrl(file);
+      if (url) {
+        selectedImages.push(url);
+        updateImagePreviews();
+      }
+    }
+  } catch (error) {
+    imageName.textContent = error.message;
+  }
+});
 document.querySelector('#settingsButton').addEventListener('click', () => {
   const isOpen = settings.classList.toggle('open');
   document.querySelector('#app').classList.toggle('settings-open', isOpen);
@@ -101,35 +177,14 @@ document.addEventListener('paste', async (event) => {
   const items = (event.clipboardData || event.originalEvent.clipboardData).items;
   
   for (const item of items) {
-    // Check if the pasted item is an image file (Screenshot)
-    if (item.type.indexOf('image') === 0) {
+      if (item.type.indexOf('image') === 0) {
       const blob = item.getAsFile();
-      
-      // Convert the clipboard image blob into a standard File Object array
-      const file = new File([blob], "pasted-screenshot.png", { type: blob.type });
-      
-      // Reference your existing hidden file input element (id="image")
-      const fileInput = document.getElementById('image');
-      
-      if (fileInput) {
-        // Programmatically attach the pasted file straight into the file container
-        const dataTransfer = new DataTransfer();
-        dataTransfer.items.add(file);
-        fileInput.files = dataTransfer.files;
-        
-        // Trigger the visual UI updates you already have coded for your file selector
-        const eventChange = new Event('change', { bubbles: true });
-        fileInput.dispatchEvent(eventChange);
-        
-        // Visual indicator update matching your index.html layout rules
-        const imageNameSpan = document.getElementById('imageName');
-        if (imageNameSpan) {
-          imageNameSpan.textContent = "Screenshot Pasted ✅";
-          imageNameSpan.style.color = "#4ade80"; // Turn it green for success feedback
-        }
+      const file = new File([blob], 'pasted-screenshot.png', { type: blob.type });
+      const url = await fileToDataUrl(file);
+      if (url) {
+      selectedImages.push(url);
+      updateImagePreviews();
       }
-      
-      // Stop the browser engine from trying to print blank text spaces into your input
       event.preventDefault();
       break;
     }

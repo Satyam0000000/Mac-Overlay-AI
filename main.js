@@ -1,9 +1,26 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, Menu, safeStorage } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, Menu, safeStorage, systemPreferences, desktopCapturer } = require('electron');
 const OpenAI = require('openai');
 const fs = require('node:fs');
 const path = require('node:path');
 
 let win;
+
+async function captureScreen() {
+  try {
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: 1920, height: 1080 }
+    });
+    const source = sources.find((item) => item.thumbnail && !item.thumbnail.isEmpty());
+    if (!source) throw new Error('No usable display source was returned.');
+    const png = source.thumbnail.toPNG();
+    if (png.length === 0) throw new Error('The display returned an empty image.');
+    return `data:image/png;base64,${png.toString('base64')}`;
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err || 'Unknown error');
+    throw new Error('Screen capture failed: ' + reason);
+  }
+}
 
 // The encrypted file is only readable by this macOS user account when
 // Electron's safeStorage backend is available (Keychain on macOS).
@@ -94,8 +111,13 @@ app.whenReady().then(() => {
   // Accessory apps run without a Dock icon and keep their process alive when
   // the overlay is hidden. Alt+L is the normal way to bring it back.
   app.setActivationPolicy('accessory');
+  if (process.platform === 'darwin') {
+    systemPreferences.getMediaAccessStatus('screen');
+  }
   installMacMenu();
   createWindow();
+  ipcMain.removeHandler('capture:screen');
+  ipcMain.handle('capture:screen', captureScreen);
 
   // Updated to include the robustness shortcut configuration requested while keeping Alt+L
   globalShortcut.register('CommandOrControl+Shift+K', () => {
@@ -130,7 +152,7 @@ ipcMain.handle('key:save', (_event, value) => {
   return true;
 });
 
-ipcMain.handle('chat:send', async (_event, { text, imageDataUrl, history }) => {
+ipcMain.handle('chat:send', async (_event, { text, imageDataUrl, images, history, model }) => {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error('Save an OpenAI API key in Settings first.');
 
@@ -142,10 +164,14 @@ ipcMain.handle('chat:send', async (_event, { text, imageDataUrl, history }) => {
     content: messageText
   }));
   const content = [{ type: 'input_text', text: String(text || '') }];
-  if (imageDataUrl) content.push({ type: 'input_image', image_url: imageDataUrl, detail: 'auto' });
+  if (Array.isArray(images)) {
+    for (const img of images) content.push({ type: 'input_image', image_url: img, detail: 'auto' });
+  } else if (imageDataUrl) {
+    content.push({ type: 'input_image', image_url: imageDataUrl, detail: 'auto' });
+  }
   input.push({ role: 'user', content });
 
   const client = new OpenAI({ apiKey });
-  const response = await client.responses.create({ model: 'o3', input });
+  const response = await client.responses.create({ model: model || 'gpt-5.4', input });
   return response.output_text || 'No text response returned.';
 });
